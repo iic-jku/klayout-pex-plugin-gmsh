@@ -1,0 +1,41 @@
+[project]
+name = "klayout-pex-plugin-gmsh"
+version = "0.1.0"
+description = "gmsh volume meshes of KLayout-PEX PEX25D scenes, for FEM solvers"
+authors = [{ name = "Martin Köhler", email = "info@martinjankoehler.com" }]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+keywords = ["pex", "parasitic", "extraction", "klayout", "gmsh", "fem"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+dependencies = [
+    # plugin API v1 is provisional: stay within one klayout-pex minor release
+    "klayout-pex>=0.6.2,<0.7",
+    # IIC-OSIC-TOOLS provides gmsh 4.12.1.dev1 from APT, and PyPI has no Linux aarch64
+    # wheel: a higher floor would break the install there. Use the 4.12 API only.
+    "gmsh>=4.12",
+]
+
+[project.urls]
+repository = "https://github.com/iic-jku/klayout-pex-plugin-gmsh"
+
+[project.entry-points."klayout_pex.exporters.v1"]
+gmsh = "klayout_pex_plugins.gmsh:create_exporter"
+
+[tool.poetry]
+packages = [{ include = "klayout_pex_plugins/gmsh", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
