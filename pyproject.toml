@@ -31,7 +31,7 @@ gmsh = "klayout_pex_plugins.gmsh:create_exporter"
 packages = [{ include = "klayout_pex_plugins/gmsh", from = "src" }]
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0"
+pytest = "^9.0"
 allure-pytest = ">=2.13.5"
 coverage = ">=7.6.8"
 
