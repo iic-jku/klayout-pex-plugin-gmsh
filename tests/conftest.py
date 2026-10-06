@@ -42,6 +42,18 @@ from klayout_pex import pex25d
 DATA = Path(__file__).parent.parent / 'testdata'
 
 
+def pytest_collection_modifyitems(items):
+    """
+    Group these tests on the KLayout-PEX Allure page, whose CI runs them too.
+    Labels as marks, so that tests skipped before their fixtures run get them too.
+    """
+    for item in items:
+        for label_type, value in (('parentSuite', 'Plugin Tests'),
+                                  ('suite', 'klayout-pex-plugin-gmsh'),
+                                  ('subSuite', item.module.__name__.rsplit('.', 1)[-1])):
+            item.add_marker(pytest.mark.allure_label(value, label_type=label_type))
+
+
 def load_scene(name: str):
     return pex25d.resolve(pex25d.read(str(DATA / name)))
 

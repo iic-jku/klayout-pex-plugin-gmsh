@@ -1,0 +1,168 @@
+##
+## --------------------------------------------------------------------------------
+## SPDX-FileCopyrightText: 2026 Martin Jan Köhler and Harald Pretl
+## Johannes Kepler University, Institute for Integrated Circuits.
+##
+## This file is part of klayout-pex-plugin-gmsh
+## (see https://github.com/iic-jku/klayout-pex-plugin-gmsh).
+##
+## This program is free software: you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, either version 3 of the License, or
+## (at your option) any later version.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program. If not, see <http://www.gnu.org/licenses/>.
+## SPDX-License-Identifier: GPL-3.0-or-later
+## --------------------------------------------------------------------------------
+##
+
+# Tests and releases of this repository. The KLayout-PEX Allure and coverage pages
+# get their plugin results from klayout-pex's own CI, which runs these tests too.
+
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.repository }}-${{ github.event.number || github.head_ref || github.sha }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash    # NOTE: required for windows poetry calls
+
+jobs:
+  test:
+    name: Test ${{ matrix.os }}-py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.12']
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: "[🐍] Setup python ${{ matrix.python-version }}"
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: "[🐍] Install Poetry"
+      uses: snok/install-poetry@v1
+      with:
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: "[🐍] Check version"
+      if: ${{ github.event.release }}
+      run: |
+        version=$(poetry version --short)
+        if [ "v$version" != "${{ github.event.release.tag_name }}" ]; then
+          echo "Release tag ('${{ github.event.release.tag_name }}') and poetry version ('v$version') do not match!"
+          exit 1
+        fi
+
+    # NOTE: the gmsh wheel links against these
+    - name: "Install gmsh's system libraries"
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes libgl1 libglu1-mesa libgomp1 libxcursor1 libxft2 libxinerama1 libxrender1
+
+    - name: "[🐍] Install"
+      run: poetry install --no-interaction
+
+    - name: "[🐍] Run tests"
+      run: poetry run pytest --color no -rA
+
+  build:
+    name: Build distribution 📦s
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: "[🐍] Setup python"
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.12'
+
+    - name: "[🐍] Install Poetry"
+      uses: snok/install-poetry@v1
+
+    - name: "[🐍] Build wheel and source archives"
+      run: poetry build --output dist
+
+    # A klayout_pex_plugins/__init__.py would hide every other plugin's package
+    - name: "[🐍] Verify the namespace package stays implicit"
+      run: |
+        if unzip -l dist/*.whl | grep -q ' klayout_pex_plugins/__init__.py$'; then
+          echo "The wheel ships klayout_pex_plugins/__init__.py"
+          exit 1
+        fi
+
+    - name: "[🐍] Store dist artifact"
+      uses: actions/upload-artifact@v6
+      with:
+        name: python-dist
+        path: dist
+        retention-days: 7
+        if-no-files-found: error
+
+  # Trusted Publishing: register this repository, this workflow file and the
+  # environment as a (pending) publisher of the project on TestPyPI and PyPI.
+  # Publishing has to happen in this file; PyPI does not accept a reusable
+  # workflow as the publisher.
+  publish-test-pypi:
+    name: Publish distribution 📦s to TestPyPI
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    continue-on-error: true    # fails when the version was not bumped
+    environment: testpypi
+    permissions:
+      id-token: write
+
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        name: python-dist
+        path: dist
+
+    - uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish distribution 📦s to PyPI
+    needs: build
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        name: python-dist
+        path: dist
+
+    - uses: pypa/gh-action-pypi-publish@release/v1
