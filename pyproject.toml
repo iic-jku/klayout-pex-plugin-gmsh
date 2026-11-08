@@ -1,6 +1,6 @@
 [project]
 name = "klayout-pex-plugin-gmsh"
-version = "0.1.0"
+version = "0.1.1"
 description = "gmsh volume meshes of KLayout-PEX PEX25D scenes, for FEM solvers"
 authors = [{ name = "Martin Köhler", email = "info@martinjankoehler.com" }]
 license = "GPL-3.0-or-later"
@@ -14,8 +14,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
 ]
 dependencies = [
-    # plugin API v1 is provisional: stay within one klayout-pex minor release
-    "klayout-pex>=0.6.2,<0.7",
+    "klayout-pex>=0.6.2,<1",
     # IIC-OSIC-TOOLS provides gmsh 4.12.1.dev1 from APT, and PyPI has no Linux aarch64
     # wheel: a higher floor would break the install there. Use the 4.12 API only.
     "gmsh>=4.12",
