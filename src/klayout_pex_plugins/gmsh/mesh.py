@@ -46,6 +46,7 @@ from importlib import metadata
 import json
 import math
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 from klayout_pex.log import debug, info
@@ -100,9 +101,12 @@ class MeshResult:
     terminal_faces: List[int] = field(default_factory=list, repr=False)
     """The model's faces of all terminals, for refining the mesh near conductors."""
 
+    body_names_path: Optional[str] = None
+    """Electrical identities when distinct bodies need disambiguated solver labels."""
+
     @property
     def paths(self) -> List[str]:
-        return [self.msh_path, self.groups_path]
+        return [self.msh_path, self.groups_path] + ([self.body_names_path] if self.body_names_path else [])
 
 
 def write_mesh(scene: PEX25DScene,
@@ -113,11 +117,16 @@ def write_mesh(scene: PEX25DScene,
     Mesh ``scene`` and write ``<prefix>mesh.msh`` (gmsh 2.2, ASCII), plus
     ``<prefix>mesh.json`` naming each physical group.
     """
+    from klayout_pex.plugin_api.v1 import require_scene_capabilities
+    from .exporter import GmshSceneExporter
+
+    require_scene_capabilities(GmshSceneExporter(), scene, GmshSceneExporter.name)
     try:
         import gmsh
     except ImportError as exc:
         raise ExporterUnavailable(f"The gmsh Python module is not installed: {exc}") from exc
     from .solids import scene_solids
+    from klayout_pex.plugin_api.v1 import write_solver_body_map
 
     solids = scene_solids(scene, settings.field_margin_um)
 
@@ -132,6 +141,8 @@ def write_mesh(scene: PEX25DScene,
     with open(result.groups_path, 'w', encoding='utf-8') as file:
         json.dump(_groups_document(result), file, indent=2)
         file.write('\n')
+    result.body_names_path = write_solver_body_map(
+        scene, Path(output_dir_path) / f"{prefix}body_names.json")
     info(f"Meshed {len(result.dielectrics)} dielectric(s) and {len(result.terminals)} "
          f"terminal(s): {result.node_count} nodes, {result.tetrahedron_count} tetrahedra, "
          f"{result.mesh_size_edge_um} µm at conductor edges, up to {result.mesh_size_max_um} µm")

@@ -66,3 +66,8 @@ def two_nets():
 @pytest.fixture(scope='session')
 def overlap_plates():
     return load_scene('overlap_plates_100um_x_100um_m1_m2.pex25d')
+
+
+@pytest.fixture
+def ground_cutout():
+    return load_scene('ground_cutout.pex25d')
