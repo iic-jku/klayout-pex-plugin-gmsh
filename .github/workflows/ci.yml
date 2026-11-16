@@ -46,7 +46,7 @@ defaults:
 
 jobs:
   test:
-    name: Test ${{ matrix.os }}-py${{ matrix.python-version }}
+    name: ${{ github.event_name == 'pull_request' && 'Source compatibility' || 'Published dependencies' }} ${{ matrix.os }}-py${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -55,8 +55,23 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.12']
 
+    env:
+      KPEX_KLAYOUT_EXE: /nonexistent
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+
     steps:
     - uses: actions/checkout@v7
+
+    # PR checks exercise the unreleased API without relabelling core's version.
+    # Remove this path once core 0.10.0 is published and poetry.lock is refreshed.
+    - name: Check out pinned core source for PR compatibility tests
+      if: github.event_name == 'pull_request'
+      uses: actions/checkout@v7
+      with:
+        repository: iic-jku/klayout-pex
+        ref: 8531325df71c5e5d62d376ca15a13a01ef5aa807
+        path: output_core_source
 
     - name: "[🐍] Setup python ${{ matrix.python-version }}"
       uses: actions/setup-python@v7
@@ -85,10 +100,32 @@ jobs:
         sudo apt-get update
         sudo apt-get install --yes libgl1 libglu1-mesa libgomp1 libxcursor1 libxft2 libxinerama1 libxrender1
 
-    - name: "[🐍] Install"
-      run: poetry install --no-interaction
+    - name: Install pinned source and PR test dependencies
+      if: github.event_name == 'pull_request'
+      run: |
+        python -m pip install 'grpcio-tools>=1.81,<1.82' 'gmsh>=4.12' 'pytest>=9,<10' 'allure-pytest>=2.13.5'
+        python -m grpc_tools.protoc \
+          --proto_path=output_core_source/protos \
+          --python_out=output_core_source/klayout_pex_protobuf \
+          $(find output_core_source/protos -name '*.proto')
+        python output_core_source/scripts/gen_tech_pb output_core_source/klayout_pex_protobuf
+        python -m pip install ./output_core_source
+        # Core retains its source version. This intentionally does not assert
+        # that the plugin's >=0.10.0 release dependency can already be installed.
+        python -m pip install --no-deps .
 
-    - name: "[🐍] Run tests"
+    - name: Run source compatibility tests
+      if: github.event_name == 'pull_request'
+      run: python -m pytest --color no -rA
+
+    - name: Install published release dependencies
+      if: github.event_name != 'pull_request'
+      run: |
+        poetry check --lock
+        poetry install --no-interaction
+
+    - name: Run release dependency tests
+      if: github.event_name != 'pull_request'
       run: poetry run pytest --color no -rA
 
   build:

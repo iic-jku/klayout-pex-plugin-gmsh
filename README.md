@@ -17,12 +17,29 @@ Output:
   - one surface per net, floating conductor and ground plane: where it touches a dielectric
   - `outer_boundary`: the faces of the domain box
 - `mesh.json`: tag, name and permittivity of every group
+- `body_names.json`, when labels need disambiguation: the electrical identity of each solver label
 
 Conductors are not meshed, as electrostatics only needs their surfaces.
 
+## Ground openings and electrical identity
+
+`GROUND_CUTOUT` polygons remove parts of the reference plane. Overlapping openings
+are unioned, and polygon holes retain ground islands. Films wrapping the ground
+use its retained footprint. Removing the whole reference body is rejected.
+
+The ground profile name identifies its geometry and coatings. Its explicit `NET`
+identifies the electrical reference. Contacts on that net share its terminal group.
+A floating conductor remains a separate body even when its name matches a net.
+When this requires a different solver label, `body_names.json` records the mapping.
+A filename prefix applies to that file too.
+
+Scenes requiring capacitance accounting are rejected before output. Ground
+openings and electrical ownership alone do not implement exclusion masks, charge
+groups or filtered capacitance results.
+
 ## Options
 
-Pass them with `pex25d export --option NAME=VALUE` (klayout-pex 0.6.3 or later) or `options={...}` in Python. `--field_margin` sets `field_margin_um`.
+Pass them with `pex25d export --option NAME=VALUE` or `options={...}` in Python. `--field_margin` sets `field_margin_um`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -50,7 +67,7 @@ How the default edge size does on the ihp-sg13g2 test design `overlap_plates_100
 
 ## Requirements
 
-- klayout-pex 0.6.x (plugin API v1 is provisional)
+- `klayout-pex>=0.10.0,<1` (plugin API `v1` is provisional)
 - gmsh ≥ 4.12. IIC-OSIC-TOOLS provides 4.12.1 from APT, and PyPI has no Linux aarch64 wheel, so the code sticks to the 4.12 API.
 
 ## Development
