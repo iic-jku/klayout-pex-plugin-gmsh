@@ -104,6 +104,14 @@ jobs:
       if: github.event_name == 'pull_request'
       run: |
         python -m pip install 'grpcio-tools>=1.81,<1.82' 'gmsh>=4.12' 'pytest>=9,<10' 'allure-pytest>=2.13.5'
+        python - <<'PYTHON'
+        import subprocess
+        import sys
+        import tomllib
+        from pathlib import Path
+        core = tomllib.loads(Path('output_core_source/pyproject.toml').read_text(encoding='utf-8'))
+        subprocess.run([sys.executable, '-m', 'pip', 'install', *core['project']['dependencies']], check=True)
+        PYTHON
         python -m grpc_tools.protoc \
           --proto_path=output_core_source/protos \
           --python_out=output_core_source/klayout_pex_protobuf \
