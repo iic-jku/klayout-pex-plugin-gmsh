@@ -55,6 +55,11 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.12']
 
+    env:
+      KPEX_KLAYOUT_EXE: /nonexistent
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+
     steps:
     - uses: actions/checkout@v7
 
@@ -86,7 +91,9 @@ jobs:
         sudo apt-get install --yes libgl1 libglu1-mesa libgomp1 libxcursor1 libxft2 libxinerama1 libxrender1
 
     - name: "[🐍] Install"
-      run: poetry install --no-interaction
+      run: |
+        poetry check --lock
+        poetry install --no-interaction
 
     - name: "[🐍] Run tests"
       run: poetry run pytest --color no -rA

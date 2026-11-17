@@ -26,9 +26,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, List, Mapping, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, FrozenSet, List, Mapping, Optional
 
-from klayout_pex.plugin_api.v1 import PEX25DSceneExporter
+from klayout_pex.plugin_api.v1 import PEX25DSceneExporter, SceneCapability
 
 from .mesh import write_mesh
 from .options import GmshMeshOptions, parse_options
@@ -42,6 +42,10 @@ class GmshSceneExporter(PEX25DSceneExporter):
 
     name: ClassVar[str] = 'gmsh'
     default_prefix: ClassVar[str] = ''
+
+    @classmethod
+    def supported_capabilities(cls) -> FrozenSet[SceneCapability]:
+        return frozenset({SceneCapability.GROUND_CUTOUTS, SceneCapability.ELECTRICAL_IDENTITY})
 
     def export(self,
                scene: PEX25DScene,

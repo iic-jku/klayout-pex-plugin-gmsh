@@ -51,7 +51,10 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import klayout.db as kdb
 
 from klayout_pex import pex25d
-from klayout_pex.plugin_api.v1 import ExportError
+from klayout_pex.plugin_api.v1 import (
+    ExportError, GroundGeometryError, check_native_ground_coordinate, retained_ground_region,
+    conductor_body, ground_body, solver_body_names, region_of,
+)
 
 if TYPE_CHECKING:
     from klayout_pex_protobuf.kpex.pex25d.pex25d_scene_pb2 import PEX25DScene
@@ -119,7 +122,10 @@ def length_unit_um(units) -> Fraction:
 
 def scene_solids(scene: PEX25DScene, field_margin_um: float) -> SceneSolids:
     """Split the domain of ``scene`` into disjoint prisms by the occupancy rule."""
-    return _SolidsBuilder(scene, field_margin_um).build()
+    try:
+        return _SolidsBuilder(scene, field_margin_um).build()
+    except GroundGeometryError as exc:
+        raise ExportError(f"Gmsh ground geometry cannot be represented: {exc}") from exc
 
 
 class _SolidsBuilder:
@@ -134,6 +140,11 @@ class _SolidsBuilder:
         self.layers = {layer.name: layer for layer in scene.layers}
         self.dielectrics = {d.name: d for d in scene.dielectrics}
         self.field = self._field_box()
+        self.body_names = solver_body_names(scene)
+        self.ground_region = (retained_ground_region(scene.ground_plane, self.field_region)
+                              if scene.HasField('ground_plane') else None)
+        if self.ground_region is not None and self.ground_region.is_empty():
+            raise ExportError("Ground cutouts remove the complete reference body inside the export field")
         self._solids: Dict[str, List[Claim]] = {}
 
     # ---------------------------------------------------------------- field
@@ -144,17 +155,21 @@ class _SolidsBuilder:
         the field margin, as the FasterCap exporter does.
         """
         domain = self.scene.domain
-        if self.scene.HasField('domain') and domain.origin != domain.ORIGIN_UNSPECIFIED:
-            box = domain.box
-            return kdb.Box(box.lower_left.x, box.lower_left.y,
-                           box.upper_right.x, box.upper_right.y)
-        bounds = domain.geometry_bounds
-        box = kdb.Box(bounds.lower_left.x, bounds.lower_left.y,
-                      bounds.upper_right.x, bounds.upper_right.y)
-        if box.empty() or box.width() == 0 or box.height() == 0:
-            raise ExportError("The scene has neither a domain nor finite geometry, so "
-                              "there is nothing to bound the unbounded materials with")
-        return box.enlarged(self.field_margin, self.field_margin)
+        explicit = self.scene.HasField('domain') and domain.origin != domain.ORIGIN_UNSPECIFIED
+        bounds = domain.box if explicit else domain.geometry_bounds
+        left, bottom = bounds.lower_left.x, bounds.lower_left.y
+        right, top = bounds.upper_right.x, bounds.upper_right.y
+        if not explicit:
+            if right <= left or top <= bottom:
+                raise ExportError("The scene has neither a domain nor finite geometry, so "
+                                  "there is nothing to bound the unbounded materials with")
+            left, bottom = left-self.field_margin, bottom-self.field_margin
+            right, top = right+self.field_margin, top+self.field_margin
+        # Check before constructing a native box: oversized protobuf coordinates
+        # can otherwise wrap, and the upper sentinel hangs native subtraction.
+        for coordinate in (left, bottom, right, top):
+            check_native_ground_coordinate(coordinate)
+        return kdb.Box(left, bottom, right, top)
 
     @property
     def field_region(self) -> kdb.Region:
@@ -191,10 +206,11 @@ class _SolidsBuilder:
         by_name: Dict[str, List[Claim]] = {}
         if self.scene.HasField('ground_plane'):
             plane = self.scene.ground_plane
-            by_name[plane.name] = [(self.field_region, plane.zlow, plane.zhigh)]
+            by_name[self.body_names[ground_body(self.scene)]] = [
+                (self.ground_region, plane.zlow, plane.zhigh)]
         for conductor in self.scene.conductors:
             # A FLOATING conductor belongs to no net and is its own body.
-            name = conductor.name if conductor.floating else conductor.net
+            name = self.body_names[conductor_body(conductor)]
             for conductor_region in conductor.regions:
                 layer = self.layers.get(conductor_region.layer)
                 if layer is None:
@@ -236,7 +252,7 @@ class _SolidsBuilder:
 
         plane = self.scene.ground_plane
         if self.scene.HasField('ground_plane') and name == plane.name:
-            return [(self.field_region, plane.zlow, plane.zhigh)]
+            return [(self.ground_region, plane.zlow, plane.zhigh)]
 
         dielectric = self.dielectrics.get(name)
         if dielectric is None:
@@ -324,17 +340,3 @@ class _SolidsBuilder:
                     open_runs[body] = Prism(body, region, z0, z1)
         prisms.extend(open_runs.values())
         return prisms
-
-
-def region_of(conductor_region) -> kdb.Region:
-    """Build a region from one conductor's shapes on one layer, in grid units."""
-    region = kdb.Region()
-    for box in conductor_region.boxes:
-        region.insert(kdb.Box(box.lower_left.x, box.lower_left.y,
-                              box.upper_right.x, box.upper_right.y))
-    for polygon in conductor_region.polygons:
-        shape = kdb.Polygon([kdb.Point(p.x, p.y) for p in polygon.outer.points])
-        for hole in polygon.holes:
-            shape.insert_hole([kdb.Point(p.x, p.y) for p in hole.points])
-        region.insert(shape)
-    return region.merged()
