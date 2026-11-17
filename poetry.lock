@@ -796,19 +796,19 @@ files = [
 
 [[package]]
 name = "klayout-pex"
-version = "0.6.2"
+version = "0.10.0"
 description = "Parasitic Extraction Tool for KLayout"
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "klayout_pex-0.6.2-py3-none-any.whl", hash = "sha256:f577a6911bbaaa3e9ee3f2ec71bfb2a47f3d3985564043adfddbf7d38f85bbcf"},
-    {file = "klayout_pex-0.6.2.tar.gz", hash = "sha256:0bf92f1bb5e119f31cf915b1761d3028e7c6827a61787035b35fc1122d83e595"},
+    {file = "klayout_pex-0.10.0-py3-none-any.whl", hash = "sha256:631ad580e56a17320863d06d1e9a19fee23fdbd7947b4bd6b59213f74a3df5f7"},
+    {file = "klayout_pex-0.10.0.tar.gz", hash = "sha256:5a01230d9d19e3fcbc25e0700f7423b36cefccc4725f998f7d0717244fb38ee5"},
 ]
 
 [package.dependencies]
 cairosvg = ">=2.7.1"
-klayout = ">=0.30.3"
+klayout = ">=0.30.12"
 matplotlib = ">=3.10.1"
 packaging = ">=24.0"
 protobuf = ">=6.33.5"
@@ -1316,4 +1316,4 @@ test = ["pytest", "ruff"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "c84b54518a8510cb3278a34330c43d7424702014672de013aef60ab7d6e51715"
+content-hash = "59af8005c4815af66299528e297c3fe4a87735d92d660e2a209c56c19f3ed99b"
